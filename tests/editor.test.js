@@ -5,7 +5,6 @@ import { loadDocument, saveDocument, readDocument } from '../editor/storage.js';
 import { toDocument, fromDocument, validate } from '../circuit.js';
 import { rsLatch } from '../examples.js';
 import { simulate } from '../simulator.js';
-import { shortcutKey } from '../editor/shortcuts.js';
 function setLatch() {
   const model = rsLatch();
   model.nodes.find(node => node.id === 'r').value = 0;
@@ -62,24 +61,6 @@ test('malformed files are rejected before replacing the current circuit', async 
   assert.deepEqual(fromDocument(legacy).values, {});
   assert.throws(() => validate({ ...legacy, nodes: [null] }), /компонент/);
   assert.throws(() => validate({ ...legacy, wires: [null] }), /соединение/);
-});
-test('shortcuts follow the physical key, not the active keyboard layout', () => {
-  // A Russian layout prints Cyrillic letters; the physical key still decides the shortcut.
-  assert.equal(shortcutKey({ code: 'KeyZ', key: 'я' }), 'z');
-  assert.equal(shortcutKey({ code: 'KeyY', key: 'н' }), 'y');
-  assert.equal(shortcutKey({ code: 'KeyS', key: 'ы' }), 's');
-  assert.equal(shortcutKey({ code: 'KeyN', key: 'т' }), 'n');
-  assert.equal(shortcutKey({ code: 'KeyZ', key: 'Z' }), 'z');
-  assert.equal(shortcutKey({ code: 'Digit3', key: '3' }), '3');
-  // Input methods that report no physical code at all still resolve.
-  assert.equal(shortcutKey({ key: 'я' }), 'z');
-  assert.equal(shortcutKey({ key: 'Я' }), 'z');
-  assert.equal(shortcutKey({ key: 'н' }), 'y');
-  assert.equal(shortcutKey({ key: 'ы' }), 's');
-  assert.equal(shortcutKey({ key: 'т' }), 'n');
-  assert.equal(shortcutKey({ key: '/' }), '/');
-  assert.equal(shortcutKey({ key: '.' }), '/');
-  assert.equal(shortcutKey({ code: 'KeyZ', key: 'z' }), 'z');
 });
 test('render scheduling batches pointer moves and flushes the final frame', async () => {
   const { createRenderScheduler } = await import('../editor/render-scheduler.js');

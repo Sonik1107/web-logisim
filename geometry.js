@@ -27,41 +27,6 @@ export function route(source, target, points = []) {
     point.x !== vertices[index - 1].x || point.y !== vertices[index - 1].y);
 }
 export const pathFor = points => points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ');
-// Bounds of the drawn symbol, matching the selection rectangle in the renderer.
-export const NODE_BOX = { left: -8, top: -22, width: 96, height: 94 };
-export function boxOf(start, end) {
-  return {
-    left: Math.min(start.x, end.x),
-    top: Math.min(start.y, end.y),
-    right: Math.max(start.x, end.x),
-    bottom: Math.max(start.y, end.y),
-  };
-}
-export function nodeBox(node) {
-  return {
-    left: node.x + NODE_BOX.left,
-    top: node.y + NODE_BOX.top,
-    right: node.x + NODE_BOX.left + NODE_BOX.width,
-    bottom: node.y + NODE_BOX.top + NODE_BOX.height,
-  };
-}
-export const boxContains = (box, x, y) =>
-  x >= box.left && x <= box.right && y >= box.top && y <= box.bottom;
-// Selection captures components whole; a wire is taken when a corner of its route lands inside.
-export function selectInBox(model, box) {
-  const nodes = model.nodes.filter(node => {
-    const own = nodeBox(node);
-    return own.left >= box.left && own.right <= box.right && own.top >= box.top && own.bottom <= box.bottom;
-  }).map(node => node.id);
-  const wires = model.wires.filter(wire => {
-    if (!model.nodes.some(node => node.id === wire.from.node)) {
-      return false;
-    }
-    return route(pinPoint(model.nodes, wire.from, true), pinPoint(model.nodes, wire.to), wire.points)
-      .some(point => boxContains(box, point.x, point.y));
-  }).map(wire => wire.id);
-  return { nodes, wires };
-}
 export function nearestPoint(points, target) {
   let nearest = { distance: Infinity, index: 0, point: points[0] };
   for (let index = 1; index < points.length; index++) {
