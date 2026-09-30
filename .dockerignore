@@ -1,0 +1,9 @@
+# Only runtime assets are needed in the build context.
+**
+!Dockerfile
+!.dockerignore
+!index.html
+!style.css
+!*.js
+!editor/
+!editor/*.js
