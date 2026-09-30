@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Web Logisim</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header>
+ <a class="brand" href="./"><span class="logo">⊕</span> Web Logisim</a>
+ <nav aria-label="Меню приложения">
+  <details><summary>Файл</summary><div class="menu"><button id="new">Новая схема <kbd>Ctrl+Alt+N</kbd></button><button id="import">Открыть JSON…</button><button id="export">Сохранить JSON… <kbd>Ctrl+S</kbd></button></div></details>
+  <details><summary>Правка</summary><div class="menu"><button data-action="undo">Отменить <kbd>Ctrl+Z</kbd></button><button data-action="redo">Повторить <kbd>Ctrl+Shift+Z</kbd></button><button data-action="delete">Удалить <kbd>Delete</kbd></button></div></details>
+  <details><summary>Симуляция</summary><div class="menu"><button data-action="pause">Пауза / продолжить</button><button id="reset-sim">Сбросить состояние</button></div></details>
+  <details><summary>Примеры</summary><div class="menu"><button id="rs-example">RS-триггер на NOR</button><button id="example">Полусумматор</button></div></details>
+  <details><summary>Справка</summary><div class="menu help-menu"><strong>Управление</strong><p>1 — выбор и перемещение<br>2 — переключение входов<br>3 — рисование проводов<br>4 — перемещение поля</p><p>Выберите компонент слева, затем нажмите на поле. Shift — добавить несколько.</p><p>Провод: нажмите на пин, задайте углы нажатием на поле и завершите на другом пине. Также можно протянуть провод между пинами.</p><p>Пересечение линий само по себе не соединяет их. Для ответвления выберите «Провод» и нажмите на существующий провод.</p><p>Escape — отменить действие.<br>Колесо — масштаб. Пробел + перетаскивание — обзор.</p><a href="https://www.cburch.com/logisim/docs/2.7/en/html/guide/index.html" target="_blank" rel="noreferrer">Руководство оригинального Logisim ↗</a></div></details>
+ </nav><span id="saved">Сохранено локально</span>
+</header>
+<div class="toolbar">
+ <div class="tool-group" role="group" aria-label="Инструменты">
+  <button id="select-tool" class="active" title="Выбор (1)" aria-pressed="true">↖ <span>Выбор</span></button>
+  <button id="poke-tool" title="Переключение входов (2)" aria-pressed="false">☝ <span>Входы</span></button>
+  <button id="wire-tool" title="Провод (3)" aria-pressed="false">└ <span>Провод</span></button>
+  <button id="pan-tool" title="Перемещение поля (4)" aria-pressed="false">✥</button><i></i>
+  <button id="undo" title="Отменить (Ctrl+Z)">↶</button><button id="redo" title="Повторить (Ctrl+Shift+Z)">↷</button><button id="delete" title="Удалить выбранное (Delete)">⌫</button>
+ </div>
+ <div class="tool-group"><span class="live-dot"></span><span id="sim-status">Симуляция активна</span><button id="pause" title="Приостановить симуляцию">Ⅱ</button><i></i><button id="zoom-out" aria-label="Уменьшить">−</button><button id="zoom-reset">100%</button><button id="zoom-in" aria-label="Увеличить">+</button><button id="fit" title="Показать всю схему">⛶</button></div>
+</div>
+<main>
+ <aside class="sidebar">
+  <div class="panel-heading">Библиотека компонентов</div>
+  <label class="search"><span>⌕</span><input id="search" placeholder="Поиск…" aria-label="Поиск компонентов"><kbd>/</kbd></label>
+  <div id="components"></div>
+  <div class="panel-heading properties-heading">Свойства</div><div id="properties"></div>
+  <details class="signals-panel" open><summary>Сигналы</summary><div id="signals"></div></details>
+  <div class="legend"><span><i class="high"></i>1</span><span><i class="low"></i>0</span><span><i class="unknown"></i>X — неизвестно</span><span><i class="floating"></i>Z — нет сигнала</span></div>
+ </aside>
+ <section class="workspace">
+  <div class="circuit-tab"><span>◇</span><input id="project-name" aria-label="Название схемы" value="Новая схема"><span class="circuit-kind">main</span></div>
+  <div class="canvas-wrap"><svg id="canvas" aria-label="Редактор логических схем" tabindex="0"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><circle cx="0" cy="0" r="0.65" fill="#c8c8c8"/></pattern></defs><rect width="100%" height="100%" fill="url(#grid)"/><g id="viewport"><g id="wires"></g><g id="nodes"></g><g id="wire-handles"></g><g id="placement"></g><path id="preview" fill="none" stroke="#1680c4" stroke-width="2" stroke-dasharray="5 4"/></g></svg><div id="toast" role="status"></div></div>
+  <footer><span id="tool-hint">Выбор: перетаскивайте элементы. Двойной щелчок по входу — 0 / 1.</span><span id="counts"></span><span id="pointer">X: 0 Y: 0</span></footer>
+ </section>
+</main>
+<input type="file" id="file" accept=".json,application/json" hidden><script type="module" src="app.js"></script>
+</body></html>

@@ -1,0 +1,28 @@
+# Dependencies and generated output
+node_modules/
+dist/
+coverage/
+*.log
+npm-debug.log*
+
+# Local secrets and agent configuration
+.env
+.env.*
+!.env.example
+.aws/
+.codex/
+.agents/
+
+# Local tooling, browser profiles and test artifacts
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.tmp/
+tmp/
+artifacts/
+playwright-report/
+test-results/
