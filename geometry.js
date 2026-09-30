@@ -27,6 +27,58 @@ export function route(source, target, points = []) {
     point.x !== vertices[index - 1].x || point.y !== vertices[index - 1].y);
 }
 export const pathFor = points => points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ');
+// Frame selection shares this box with the renderer, so highlights match hit tests.
+export const NODE_BOX = { x: -8, y: -22, width: 96, height: 94 };
+export const nodeBounds = node => ({ x: node.x + NODE_BOX.x, y: node.y + NODE_BOX.y, width: NODE_BOX.width, height: NODE_BOX.height });
+export const marqueeBox = (start, end) => ({
+  x: Math.min(start.x, end.x),
+  y: Math.min(start.y, end.y),
+  width: Math.abs(end.x - start.x),
+  height: Math.abs(end.y - start.y),
+});
+export function touchesBox(box, rect) {
+  return box.x <= rect.x + rect.width && rect.x <= box.x + box.width &&
+    box.y <= rect.y + rect.height && rect.y <= box.y + box.height;
+}
+// Liang-Barsky clip: the segment counts as touched when it enters or crosses the box.
+export function segmentTouchesBox(box, start, end) {
+  const dx = end.x - start.x, dy = end.y - start.y;
+  let enter = 0, leave = 1;
+  for (const [p, q] of [[-dx, start.x - box.x], [dx, box.x + box.width - start.x],
+    [-dy, start.y - box.y], [dy, box.y + box.height - start.y]]) {
+    if (p === 0) {
+      if (q < 0) {
+        return false;
+      }
+      continue;
+    }
+    const t = q / p;
+    if (p < 0) {
+      enter = Math.max(enter, t);
+    }
+    else {
+      leave = Math.min(leave, t);
+    }
+  }
+  return enter <= leave;
+}
+// A wire is picked up when any route segment meets the frame, not only its ends.
+export function itemsInBox(model, box) {
+  const nodes = new Map(model.nodes.map(node => [node.id, node]));
+  const ids = [];
+  for (const node of model.nodes) {
+    if (touchesBox(box, nodeBounds(node))) {
+      ids.push(node.id);
+    }
+  }
+  for (const wire of model.wires) {
+    const path = route(pinPoint(nodes, wire.from, true), pinPoint(nodes, wire.to), wire.points);
+    if (path.some((point, index) => index > 0 && segmentTouchesBox(box, path[index - 1], point))) {
+      ids.push(wire.id);
+    }
+  }
+  return ids;
+}
 export function nearestPoint(points, target) {
   let nearest = { distance: Infinity, index: 0, point: points[0] };
   for (let index = 1; index < points.length; index++) {

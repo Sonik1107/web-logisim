@@ -160,6 +160,81 @@ try {
   await click('.node[data-id="r"] .body');
   await click('.node[data-id="s"] .body');
   await click('.node[data-id="s"] .body');
+  assert.equal(await value('out-q'), '1', 'latch holds Q=1 before any selection');
+  await action('select-tool');
+  const boundsOf = id => evaluate(`(()=>{const r=document.querySelector('.node[data-id="${id}"]').getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height}})()`);
+  const frameOf = async ids => {
+    const boxes = await Promise.all(ids.map(boundsOf));
+    return {
+      from: { x: Math.min(...boxes.map(b => b.x)) - 15, y: Math.min(...boxes.map(b => b.y)) - 15 },
+      to: { x: Math.max(...boxes.map(b => b.x + b.w)) + 15, y: Math.max(...boxes.map(b => b.y + b.h)) + 15 },
+    };
+  };
+  const count = selector => evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
+  const key = (k, code, modifiers = 0) => cdp('Input.dispatchKeyEvent', { type: 'keyDown', key: k, code, modifiers, windowsVirtualKeyCode: k.length === 1 ? k.toUpperCase().charCodeAt(0) : 0 })
+    .then(() => cdp('Input.dispatchKeyEvent', { type: 'keyUp', key: k, code, modifiers, windowsVirtualKeyCode: k.length === 1 ? k.toUpperCase().charCodeAt(0) : 0 }));
+  const frame = await frameOf(['q', 'nq']);
+  const marqueeShown = () => evaluate(`(()=>{const r=document.getElementById('marquee');return r.style.display==='block'&&Number(r.getAttribute('width'))>0})()`);
+  const frameDrag = async ({ verify }) => {
+    await mouse('mousePressed', frame.from);
+    await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', ...frame.to, button: 'left', buttons: 1 });
+    await sleep(50);
+    await verify();
+    await mouse('mouseReleased', frame.to);
+  };
+  await frameDrag({
+    verify: async () => {
+      assert.equal(await marqueeShown(), true, 'frame rectangle follows the pointer');
+      assert.equal(await count('.node .selection'), 2, 'frame highlights both gates while dragging');
+    },
+  });
+  assert.equal(await marqueeShown(), false, 'frame rectangle hides on release');
+  assert.equal(await count('.node .selection'), 2, 'frame selects both gates');
+  assert.ok(await count('.wire.selected') > 0, 'wires crossing the frame come along');
+  assert.equal(await evaluate('window.getSelection().toString()'), '');
+  const emptySpot = await evaluate(`(()=>{const r=document.getElementById('canvas').getBoundingClientRect();return {x:r.x+r.width-40,y:r.y+r.height-40}})()`);
+  assert.equal(await evaluate(`Boolean(document.elementFromPoint(${emptySpot.x}, ${emptySpot.y}).closest('.node,[data-wire]'))`), false, 'a clear spot on the canvas');
+  await mouse('mousePressed', emptySpot);
+  await mouse('mouseReleased', emptySpot);
+  assert.equal(await count('.node .selection'), 0, 'a click on empty canvas clears the selection');
+  await frameDrag({ verify: async () => { } });
+  assert.equal(await count('.node .selection'), 2, 'the group is selected again');
+  const gates = (await saved()).nodes.filter(n => n.id === 'q' || n.id === 'nq');
+  await drag('.node[data-id="q"] .body', 40, 0);
+  const moved = (await saved()).nodes.filter(n => n.id === 'q' || n.id === 'nq');
+  const shifts = moved.map(n => n.x - gates.find(g => g.id === n.id).x);
+  assert.ok(shifts[0] > 0 && shifts[0] % 10 === 0, 'a gate moved onto the grid');
+  assert.deepEqual(shifts[1], shifts[0], 'both gates move by the same snapped offset');
+  assert.equal(await value('out-q'), '1', 'moving a group keeps latch state');
+  await action('undo');
+  const undone = (await saved()).nodes.filter(n => n.id === 'q' || n.id === 'nq');
+  assert.deepEqual(undone.map(n => n.x), gates.map(n => n.x), 'one undo reverts the whole group');
+  assert.equal(await value('out-q'), '1');
+  await key('a', 'KeyA', 2);
+  assert.equal(await count('.node .selection'), 6, 'Ctrl+A selects every component');
+  assert.equal(await value('out-q'), '1', 'selecting all keeps latch state');
+  await key('Escape', 'Escape');
+  assert.equal(await count('.node .selection'), 0, 'Escape clears the selection');
+  await mouse('mousePressed', frame.from);
+  await cdp('Input.dispatchMouseEvent', { type: 'mouseMoved', ...frame.to, button: 'left', buttons: 1 });
+  await sleep(50);
+  assert.equal(await marqueeShown(), true);
+  await key('Escape', 'Escape');
+  assert.equal(await marqueeShown(), false, 'Escape ends the frame gesture');
+  await mouse('mouseReleased', frame.to);
+  assert.equal(await count('.node .selection'), 0, 'the released pointer starts nothing');
+  await frameDrag({ verify: async () => { } });
+  await key('Delete', 'Delete');
+  const afterDelete = await saved();
+  assert.deepEqual(afterDelete.nodes.map(n => n.id).filter(id => id === 'q' || id === 'nq'), []);
+  assert.equal(afterDelete.wires.some(w => w.from.node === 'q' || w.to.node === 'q' || w.from.node === 'nq' || w.to.node === 'nq'), false);
+  await action('undo');
+  assert.equal((await saved()).nodes.filter(n => n.id === 'q').length, 1, 'one undo restores both gates');
+  console.log('PASS: frame selection, group move, select all and group delete keep latch state');
+  await action('rs-example');
+  await click('.node[data-id="r"] .body');
+  await click('.node[data-id="s"] .body');
+  await click('.node[data-id="s"] .body');
   const exported = await saved();
   await action('new');
   await evaluate(`(()=>{const file=new File([${JSON.stringify(JSON.stringify(exported))}], 'latch.json',{type:'application/json'});const dt=new DataTransfer();dt.items.add(file);const input=document.querySelector('#file');input.files=dt.files;input.dispatchEvent(new Event('change'));})()`);
