@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { route, junctions, marqueeBox, nodeBounds, segmentTouchesBox, touchesBox, itemsInBox } from '../geometry.js';
+import { route, junctions, marqueeBox, nodeBounds, segmentTouchesBox, touchesBox, itemsInBox, localPin, bodySpan, nodeBox } from '../geometry.js';
+import { inputPins } from '../components.js';
 import { halfAdder } from '../examples.js';
 test('routes stay orthogonal through user points and terminate at both pins', () => {
   const a = { x: 10, y: 20 }, b = { x: 300, y: 50 }, points = [{ x: 200, y: 100 }, { x: 100, y: 150 }];
@@ -36,6 +37,31 @@ test('segments join the frame when they cross it, not when they miss it', () => 
   assert.equal(segmentTouchesBox(box, { x: -50, y: -50 }, { x: -10, y: -10 }), false);
   assert.equal(segmentTouchesBox(box, { x: 120, y: 120 }, { x: 200, y: 200 }), false);
   assert.equal(segmentTouchesBox(box, { x: 40, y: -50 }, { x: 40, y: 150 }), true, 'diagonal routes also work');
+});
+test('gate pins spread on the grid and the frame follows the body', () => {
+  const gate = { type: 'AND' };
+  assert.deepEqual(localPin(gate, 'a'), { x: 0, y: 20 });
+  assert.deepEqual(localPin(gate, 'b'), { x: 0, y: 40 });
+  assert.deepEqual(localPin({ type: 'AND', inputs: 3 }, 'c'), { x: 0, y: 50 });
+  assert.deepEqual(localPin({ type: 'OR', inputs: 4 }, 'd'), { x: 0, y: 60 });
+  assert.deepEqual(localPin({ type: 'AND', inputs: 32 }, 'in32'), { x: 0, y: 340 });
+  for (const count of [2, 3, 4, 7, 32]) {
+    const node = { type: 'AND', inputs: count };
+    const ys = inputPins(node).map(name => localPin(node, name).y);
+    assert.equal(ys.length, count);
+    assert.deepEqual(ys, [...ys].sort((a, b) => a - b), 'pins run from top to bottom');
+    assert.ok(ys.every(y => y % 10 === 0), 'pins stay on the grid');
+  }
+  // Two inputs keep the original span, so symbols placed before stay where they were.
+  assert.deepEqual(bodySpan(gate), { top: 5, bottom: 55 });
+  assert.deepEqual(nodeBox(gate), { x: -8, y: -22, width: 96, height: 94 });
+  assert.deepEqual(bodySpan({ type: 'XOR', inputs: 3 }), { top: -5, bottom: 65 });
+  assert.deepEqual(nodeBox({ type: 'XOR', inputs: 3 }), { x: -8, y: -28, width: 96, height: 110 });
+  const wide = { type: 'NAND', inputs: 8 }, box = nodeBox(wide);
+  assert.ok(box.y <= bodySpan(wide).top - 23, 'the label stays inside the frame');
+  assert.ok(box.y + box.height >= bodySpan(wide).bottom, 'the body stays inside the frame');
+  // A pin name outside the set falls back to the centre instead of failing.
+  assert.deepEqual(localPin(gate, 'c'), { x: 0, y: 30 });
 });
 test('a frame takes every component and wire it touches', () => {
   const model = halfAdder();

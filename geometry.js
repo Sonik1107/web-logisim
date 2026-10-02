@@ -1,13 +1,18 @@
-import { TYPES } from './components.js';
+import { VARIABLE_GATES, inputCount, inputPins } from './components.js';
 import { pinKey } from './circuit.js';
 export const GRID = 10;
 export const snap = value => Math.round(value / GRID) * GRID;
+export const INPUT_SPACING = 20;
 export function localPin(node, pin, output = false) {
   if (output) {
     return { x: 80, y: 30 };
   }
-  const inputs = TYPES[node.type].inputs;
-  return { x: 0, y: inputs.length === 1 ? 30 : pin === inputs[0] ? 20 : 40 };
+  const inputs = inputPins(node);
+  const index = inputs.indexOf(pin);
+  if (index < 0) {
+    return { x: 0, y: 30 };
+  }
+  return { x: 0, y: 30 + (index - (inputs.length - 1) / 2) * INPUT_SPACING };
 }
 export function pinPoint(nodes, reference, output = false) {
   const node = nodes instanceof Map ? nodes.get(reference.node) : nodes.find(node => node.id === reference.node);
@@ -27,9 +32,23 @@ export function route(source, target, points = []) {
     point.x !== vertices[index - 1].x || point.y !== vertices[index - 1].y);
 }
 export const pathFor = points => points.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.y}`).join(' ');
-// Frame selection shares this box with the renderer, so highlights match hit tests.
-export const NODE_BOX = { x: -8, y: -22, width: 96, height: 94 };
-export const nodeBounds = node => ({ x: node.x + NODE_BOX.x, y: node.y + NODE_BOX.y, width: NODE_BOX.width, height: NODE_BOX.height });
+// The body span drives the symbol and the frame selection box that the renderer
+// highlights, so hit tests match the drawing. Two inputs keep the original
+// -22..72 frame; taller gates grow upwards together with their body.
+export const LABEL_OFFSET = 14;
+export function bodySpan(node) {
+  const half = VARIABLE_GATES.includes(node.type) ? (inputCount(node) - 1) * INPUT_SPACING / 2 + 15 : 25;
+  return { top: 30 - half, bottom: 30 + half };
+}
+export function nodeBox(node) {
+  const { top, bottom } = bodySpan(node);
+  const y = Math.min(-22, top - LABEL_OFFSET - 9);
+  return { x: -8, y, width: 96, height: bottom + 17 - y };
+}
+export const nodeBounds = node => {
+  const box = nodeBox(node);
+  return { x: node.x + box.x, y: node.y + box.y, width: box.width, height: box.height };
+};
 export const marqueeBox = (start, end) => ({
   x: Math.min(start.x, end.x),
   y: Math.min(start.y, end.y),

@@ -1,4 +1,5 @@
 import { TYPES, simulate } from '../simulator.js';
+import { VARIABLE_GATES, inputCount, inputPins, MAX_INPUTS, MIN_INPUTS } from '../components.js';
 import { toDocument, fromDocument } from '../circuit.js';
 import { History } from './history.js';
 import { loadDocument, saveDocument, readDocument, downloadDocument } from './storage.js';
@@ -470,7 +471,42 @@ export function startEditor() {
       notify('Выберите новый вход. Escape — оставить прежнее соединение.');
     }
   });
+  // Fewer inputs means fewer pins, so wires on the removed pins have to go:
+  // otherwise the document would no longer validate.
+  function setInputCount(input) {
+    const node = model.nodes.find(node => node.id === primary());
+    const requested = Math.trunc(input.valueAsNumber);
+    if (!node || !VARIABLE_GATES.includes(node.type) || !Number.isFinite(requested)) {
+      renderProperties();
+      return;
+    }
+    const count = Math.min(MAX_INPUTS, Math.max(MIN_INPUTS, requested));
+    if (count === inputCount(node)) {
+      renderProperties();
+      return;
+    }
+    checkpoint();
+    if (count === TYPES[node.type].inputs.length) {
+      delete node.inputs;
+    }
+    else {
+      node.inputs = count;
+    }
+    const pins = new Set(inputPins(node));
+    const kept = model.wires.filter(wire => !(wire.to.node === node.id && !pins.has(wire.to.pin)));
+    const dropped = model.wires.length - kept.length;
+    model.wires = kept;
+    select(node.id);
+    commit(true);
+    if (dropped) {
+      notify(`Входов: ${count}. Провода к лишним входам удалены.`);
+    }
+  }
   $('#properties').addEventListener('change', event => {
+    if (event.target.id === 'input-count') {
+      setInputCount(event.target);
+      return;
+    }
     if (event.target.id !== 'label') {
       return;
     }

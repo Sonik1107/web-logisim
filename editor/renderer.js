@@ -1,6 +1,6 @@
-import {TYPES} from '../components.js';
+import {TYPES, VARIABLE_GATES, inputCount, inputPins, MAX_INPUTS, MIN_INPUTS} from '../components.js';
 import {indexCircuit, pinKey} from '../circuit.js';
-import {snap, localPin, pinPoint, route, pathFor, junctions, NODE_BOX} from '../geometry.js';
+import {snap, localPin, pinPoint, route, pathFor, junctions, bodySpan, nodeBox, LABEL_OFFSET} from '../geometry.js';
 import {shape, color} from './symbols.js';
 import {escapeHTML, setHTML, keyedLayer, createElementCache} from './dom.js';
 
@@ -77,14 +77,17 @@ export function createRenderer(readState) {
   function nodeMarkup(node, ghost = false) {
     const definition = TYPES[node.type];
     const value = state.values[node.id] ?? 'X';
+    const box = nodeBox(node);
     const selection = !ghost && state.selected.has(node.id)
-      ? `<rect class="selection" x="${NODE_BOX.x}" y="${NODE_BOX.y}" width="${NODE_BOX.width}" height="${NODE_BOX.height}"/>` : '';
+      ? `<rect class="selection" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}"/>` : '';
     const indicator = hasIndicator(node)
       ? `<text class="value" x="35" y="38" text-anchor="middle" style="fill:${color(value)}">${value}</text>` : '';
+    // Input leads go under the body: a tall curved edge moves towards the pin line,
+    // and the opaque fill hides the remainder of the lead.
     return `<g class="node" data-id="${escape(node.id)}" transform="translate(${node.x},${node.y})">
-      ${selection}<text x="35" y="-9" text-anchor="middle">${escape(node.label)}</text>
-      ${shape(node.type)}${indicator}
-      ${definition.inputs.map(name => inputMarkup(node, name)).join('')}
+      ${selection}<text x="35" y="${bodySpan(node).top - LABEL_OFFSET}" text-anchor="middle">${escape(node.label)}</text>
+      ${inputPins(node).map(name => inputMarkup(node, name)).join('')}
+      ${shape(node)}${indicator}
       ${definition.outputs.map(name => outputMarkup(node, name, value)).join('')}
     </g>`;
   }
@@ -159,11 +162,15 @@ export function createRenderer(readState) {
   function nodeProperties(node) {
     const toggle = node.type === 'INPUT'
       ? '<button class="property-action" id="toggle-selected">Переключить 0 / 1</button>' : '';
+    const count = VARIABLE_GATES.includes(node.type)
+      ? `<tr><td>Входов</td><td><input id="input-count" type="number" min="${MIN_INPUTS}" max="${MAX_INPUTS}" step="1"
+        aria-label="Число входов" value="${inputCount(node)}"></td></tr>` : '';
     const transistorNote = node.type.endsWith('MOS')
       ? '<p class="property-note">G — управление, S — сигнал. n-MOS открыт при G=1, p-MOS при G=0; закрытый ключ выдаёт Z. Цифровая однонаправленная модель.</p>' : '';
     return `<div class="property-title">${TYPES[node.type].name}</div>
       <table class="property-table">
         <tr><td>Метка</td><td><input id="label" aria-label="Метка компонента" maxlength="40" value="${escape(node.label)}"></td></tr>
+        ${count}
         <tr><td>Выход</td><td>${state.values[node.id] ?? 'X'}</td></tr>
         <tr><td>Положение</td><td>${node.x}, ${node.y}</td></tr>
       </table>${toggle}${transistorNote}`;
@@ -207,7 +214,7 @@ export function createRenderer(readState) {
       if (!groups.has(definition.group)) groups.set(definition.group, []);
       groups.get(definition.group).push(`<button class="component ${state.placing === type ? 'active' : ''}"
         data-add="${type}" title="Разместить ${definition.name}">
-        <svg viewBox="0 0 84 65">${shape(type)}</svg><span>${definition.name}</span></button>`);
+        <svg viewBox="0 0 84 65">${shape({ type })}</svg><span>${definition.name}</span></button>`);
     }
     return [...groups].map(([name, items]) => `<details class="component-group" open>
       <summary>${GROUP_NAMES[name]}</summary><div class="component-list">${items.join('')}</div></details>`).join('')

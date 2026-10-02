@@ -38,6 +38,9 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function ready() {
   for (let i = 0; i < 100; i++) {
     if (await evaluate('Boolean(document.querySelector(".node"))')) {
+      // The startup fit runs in an animation frame: wait for it, or a measured
+      // point would not match the layout the click lands on.
+      await evaluate('new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)))');
       return;
     }
     await sleep(50);
@@ -231,6 +234,72 @@ try {
   await action('undo');
   assert.equal((await saved()).nodes.filter(n => n.id === 'q').length, 1, 'one undo restores both gates');
   console.log('PASS: frame selection, group move, select all and group delete keep latch state');
+  // A configurable gate: the panel rewrites the pin set, the model follows it.
+  const typeNumber = async (selector, text) => {
+    await click(selector);
+    await key('a', 'KeyA', 2);
+    await cdp('Input.insertText', { text });
+    for (const kind of ['rawKeyDown', 'char', 'keyUp']) {
+      await cdp('Input.dispatchKeyEvent', { type: kind, key: 'Enter', code: 'Enter',
+        text: kind === 'char' ? '\r' : undefined, windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 });
+    }
+  };
+  await action('new');
+  // An empty document is fitted 1:1, so canvas coordinates address the grid directly.
+  const origin = await evaluate(`(()=>{const r=document.getElementById('canvas').getBoundingClientRect();return {x:r.x,y:r.y}})()`);
+  const spots = [['INPUT', 100, 60], ['INPUT', 100, 200], ['INPUT', 100, 340], ['AND', 400, 200], ['OUTPUT', 700, 200]];
+  for (const [type, x, y] of spots) {
+    await click(`[data-add="${type}"]`);
+    const at = { x: origin.x + x + 40, y: origin.y + y + 30 };
+    await mouse('mousePressed', at);
+    await mouse('mouseReleased', at);
+  }
+  const gateAt = await saved();
+  assert.deepEqual(gateAt.nodes.map(n => [n.x, n.y]), spots.map(([, x, y]) => [x, y]), 'components land on the grid');
+  const [inA, inB, inC, gate, gateOut] = gateAt.nodes;
+  const pinAt = (id, pin) => `.node[data-id="${id}"] [data-pin="${pin}"]`;
+  const gatePins = async () => (await saved()).wires.filter(w => w.to.node === gate.id).map(w => w.to.pin);
+  await click(`.node[data-id="${gate.id}"] .body`);
+  assert.equal(await evaluate('document.querySelector("#input-count")?.value'), '2', 'the panel starts at two inputs');
+  await typeNumber('#input-count', '3');
+  assert.equal((await saved()).nodes.find(n => n.id === gate.id).inputs, 3);
+  assert.equal(await count(`.node[data-id="${gate.id}"] [data-direction="in"]`), 3, 'the gate draws three input pins');
+  await click(pinAt(inA.id, 'out'));
+  await click(pinAt(gate.id, 'a'));
+  await click(pinAt(inB.id, 'out'));
+  await click(pinAt(gate.id, 'b'));
+  await click(pinAt(inC.id, 'out'));
+  await click(pinAt(gate.id, 'c'));
+  await click(pinAt(gate.id, 'out'));
+  await click(pinAt(gateOut.id, 'in'));
+  assert.deepEqual(await gatePins(), ['a', 'b', 'c'], 'each extra pin takes one wire');
+  assert.equal(await value(gateOut.id), '0');
+  await action('poke-tool');
+  await click(`.node[data-id="${inA.id}"] .body`);
+  await click(`.node[data-id="${inB.id}"] .body`);
+  assert.equal(await value(gateOut.id), '0', 'a zero on the third input still holds the gate');
+  await click(`.node[data-id="${inC.id}"] .body`);
+  assert.equal(await value(gateOut.id), '1', 'three high inputs drive the gate');
+  await action('select-tool');
+  await click(`.node[data-id="${gate.id}"] .body`);
+  await typeNumber('#input-count', '2');
+  const shrunk = await saved();
+  assert.equal(shrunk.nodes.find(n => n.id === gate.id).inputs, undefined, 'the default count keeps no field');
+  assert.deepEqual(await gatePins(), ['a', 'b'], 'the wire to the removed pin is gone');
+  assert.equal(await count(`.node[data-id="${gate.id}"] [data-direction="in"]`), 2, 'the gate draws two input pins again');
+  assert.equal(await value(gateOut.id), '1', 'the remaining drivers still work');
+  assert.match(await evaluate('document.getElementById("toast").textContent'), /удалены/, 'the user learns about the dropped wires');
+  await action('undo');
+  assert.deepEqual(await gatePins(), ['a', 'b', 'c'], 'one undo restores the third wire');
+  assert.equal(await value(gateOut.id), '1');
+  await action('redo');
+  assert.deepEqual(await gatePins(), ['a', 'b']);
+  // A new pin has no driver: it reads as Z instead of being ignored or invented.
+  await click(`.node[data-id="${gate.id}"] .body`);
+  await typeNumber('#input-count', '3');
+  assert.equal(await count(`.node[data-id="${gate.id}"] [data-direction="in"]`), 3);
+  assert.equal(await value(gateOut.id), 'X', 'a floating extra input never turns into 1');
+  console.log('PASS: gate input count rewrites pins, drops spare wires and keeps undo consistent');
   await action('rs-example');
   await click('.node[data-id="r"] .body');
   await click('.node[data-id="s"] .body');
